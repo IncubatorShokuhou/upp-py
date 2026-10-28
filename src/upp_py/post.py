@@ -15,7 +15,7 @@ import numpy as np
 import xarray as xr
 
 from upp_py.aerosol import clip_number_concentration, mass_concentration
-from upp_py.brightness import BRTMP_SKIP_REASON, VIS_GSD_SKIP_REASON
+from upp_py.brightness import VIS_GSD_SKIP_REASON, compute_brtmp, skip_reason
 from upp_py.cape import cape_best, cape_mixed_layer, cape_most_unstable, cape_surface
 from upp_py.clouds import cloud_fraction
 from upp_py.config import PostConfig
@@ -149,6 +149,29 @@ def _add_aerosols(state: WrfState, cfg: PostConfig, data_vars: dict, coords: dic
             notes.append(f"{short}: wrfout has no {wrf_name}.")
             continue
         data_vars[key] = _var(arr, ("time", "y", "x"), short, long_name, units)
+
+
+def _add_brtmp(state: WrfState, cfg: PostConfig, data_vars: dict, coords: dict, notes: list[str]) -> None:
+    """Write ``brtmp`` when ``upp_crtm`` is installed. Otherwise record a skip."""
+    try:
+        tb = compute_brtmp(state, satellite=cfg.brtmp_satellite, channels=cfg.brtmp_channels)
+    except Exception as exc:
+        # BrtmpUnavailable, and any unexpected failure from the optional package.
+        notes.append(f"BRTMP: {exc}")
+        return
+    coords["abi_channel"] = (
+        "abi_channel",
+        np.asarray(cfg.brtmp_channels, dtype=np.int32),
+        {"long_name": "ABI channel number", "satellite": cfg.brtmp_satellite},
+    )
+    data_vars["brtmp"] = _var(
+        tb,
+        ("time", "abi_channel", "y", "x"),
+        "BRTMP",
+        f"brightness temperature {cfg.brtmp_satellite}",
+        "K",
+        satellite=cfg.brtmp_satellite,
+    )
 
 
 def precipitable_water(state: WrfState) -> np.ndarray:
@@ -619,7 +642,7 @@ def dataset_from_state(state: WrfState, cfg: PostConfig) -> xr.Dataset:
     if cfg.wants("VIS_GSD"):
         notes.append("VIS_GSD: " + VIS_GSD_SKIP_REASON)
     if cfg.wants("BRTMP"):
-        notes.append("BRTMP: " + BRTMP_SKIP_REASON)
+        _add_brtmp(state, cfg, data_vars, coords, notes)
 
     _add_aerosols(state, cfg, data_vars, coords, notes)
 

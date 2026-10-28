@@ -58,3 +58,5 @@ API 参考
    upp_py.precip.bucket_total_mm
    upp_py.precip.window_accumulation_mm
    upp_py.aerosol.mass_concentration
+   upp_py.brightness.compute_brtmp
+   upp_py.brightness.load_brightness_temperature

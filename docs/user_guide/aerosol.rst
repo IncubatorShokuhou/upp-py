@@ -22,7 +22,4 @@
 
 海盐、硫酸盐、有机碳和黑碳在 ``MDLFLD.f`` 有写出。WRF 的 ``INITPOST.F`` 没有对应的 ``VarName``。不做。
 
-亮温
-----
-
-``CALRAD_WCLOUD_newcrtm.f``（可用场 275，短名 BRTMP）调用 CRTM，算 GOES-16/17 ABI 红外通道 7 到 16。光谱系数和透过率系数不在 wrfout 里。upp-py 不包 CRTM，也不用 ``TSK**4`` 代替亮温。请求 ``BRTMP`` 时只在 ``skipped`` 里留原因。
+亮温在 :doc:`brightness`。
