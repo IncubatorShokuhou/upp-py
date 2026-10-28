@@ -23,7 +23,7 @@ Carr Fire `wrfout_d01_2018-07-23_21_00_00`（WRF-ARW 4.7.1，199×199×79，3 km
 | TMP 250 hPa | K | 1.892e-05 | 0.002896 | 0.005037 | 0.99999 |
 | RH 250 hPa | % | 0.00125 | 0.2884 | 0.5001 | 0.99989 |
 | REFC | dBZ | 0 | 0 | 0 | nan |
-| REFD 1 km | dBZ | -10 | 10 | 10 | nan |
+| REFD 1 km | dBZ | 0 | 0 | 0 | nan |
 | CAPE surface | J/kg | -8.249 | 11.04 | 36.3 | 0.99998 |
 | CIN surface | J/kg | -1.213 | 15.48 | 747.7 | 0.98212 |
 | CAPE mixed_layer | J/kg | -5.389 | 8.702 | 174.1 | 0.99993 |
@@ -51,5 +51,5 @@ Carr Fire `wrfout_d01_2018-07-23_21_00_00`（WRF-ARW 4.7.1，199×199×79，3 km
 - **PWAT** 按 `CALPW.f`（`IDECID<=1`，只积分水汽）计算。
 - **APCP** 在这个时次是模式起始时刻，`RAINC+RAINNC` 为 0，和 GRIB 的 0–0 累积一致。
 - **REFC**：NCAR + Thompson（`mp_physics=8`）写出的是模式变量 `REFL_10CM` 的柱最大（`MDLFLD.f`）。这个 wrfout 里该变量全是 0，所以两边都是 0，相关系数没有定义。Stoelinga 诊断仍会算（unipost 日志里的 `dbze_max` 约 1 dBZ），但不会写进这条 REFC。
-- **REFD 1 km**：非 RAP 的分支用 Stoelinga 诊断，晴空被对流项的 0.1 mm6/m3 下限托在约 -10 dBZ。参考 GRIB 整场为 0，所以 bias 是 -10。这是写出路径和诊断值不一致，不是插值错误。
+- **REFD 1 km**：Stoelinga 公式里对流项不低于 0.1 mm6/m3，晴空裸算约 -10 dBZ。写出时把晴空和低于 0 dBZ 的值记为 0，这是有意的。参考 GRIB 的 1 km 场整场为 0，两边因此一致。
 - 整场为常数时（REFC、APCP）相关系数没有定义，表里写成 nan。

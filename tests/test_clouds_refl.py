@@ -23,5 +23,8 @@ def test_box_fraction_full_and_edge():
 def test_clear_air_composite_near_minus_10_dbz():
     state = _tiny_state()
     refl = reflectivity(state)
-    # No condensate and no convective rain -> ze_conv floor 0.1 -> -10 dBZ.
-    np.testing.assert_allclose(refl.composite, -10.0, atol=0.05)
+    # Raw Stoelinga column max still sees the 0.1 mm^6/m^3 floor.
+    np.testing.assert_allclose(refl.diagnosed, -10.0, atol=0.05)
+    # REFD writes clear air as 0 dBZ.
+    np.testing.assert_allclose(refl.agl_1km, 0.0)
+    np.testing.assert_allclose(refl.agl_4km, 0.0)

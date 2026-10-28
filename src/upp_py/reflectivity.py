@@ -17,9 +17,11 @@ is compiled off (``bb = 0``).
 Composite reflectivity is the column-maximum linear ``Z`` plus a
 convective ``Z = 300 R^{1.4}`` (``R`` in mm/h from the convective
 step precipitation), then ``10 log10``. With no convective rain the
-convective term is floored at 0.1 mm^6/m^3, so clear air sits near
-−10 dBZ. The 1 km and 4 km AGL values use the first mass level whose
-*interface* height above the surface exceeds that depth, which is the
+convective term is floored at 0.1 mm^6/m^3, so a hydrometeor-free
+column is about −10 dBZ before reporting. The 1 km and 4 km AGL
+products (REFD) write that clear-air / sub-zero result as 0 dBZ.
+Those levels use the first mass level whose *interface* height above
+the surface exceeds that depth, which is the
 ``DZ = ZINT(ll) - ZINT(lm+1)`` test in ``MDLFLD.f``.
 
 Other microphysics schemes fall through to the Ferrier-style
@@ -128,6 +130,17 @@ def _to_dbz(ze: np.ndarray) -> np.ndarray:
     return np.maximum(out, DBZMIN)
 
 
+def _reported_dbz(ze: np.ndarray) -> np.ndarray:
+    """Stoelinga dBZ with clear air stored as 0.
+
+    ``MDLFLD.f`` floors the convective contribution at 0.1 mm^6/m^3,
+    and ``10 log10(0.1)`` is −10 dBZ. REFD treats that floor, and any
+    other result below 0 dBZ, as clear sky.
+    """
+    dbz = _to_dbz(ze)
+    return np.where(dbz < 0.0, 0.0, dbz)
+
+
 def _level_at_agl(state: WrfState, ze: np.ndarray, depth: float) -> np.ndarray:
     """First mass level (from the ground) whose top interface exceeds ``depth``."""
     ny, nx = state.terrain.shape
@@ -188,7 +201,7 @@ def reflectivity(state: WrfState) -> Reflectivity:
     return Reflectivity(
         dbz=_to_dbz(ze),
         composite=composite,
-        agl_1km=_to_dbz(z1 + ze_conv),
-        agl_4km=_to_dbz(z4 + ze_conv),
+        agl_1km=_reported_dbz(z1 + ze_conv),
+        agl_4km=_reported_dbz(z4 + ze_conv),
         diagnosed=diagnosed,
     )

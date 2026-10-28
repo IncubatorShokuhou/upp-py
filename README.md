@@ -66,7 +66,7 @@ Carr Fire（2018-07-23 21:00，199×199×79，3 km）对同一文件上的 `unip
 | HLCY 0–3 km | 0.03 m²/s² | 1.000 |
 | PWAT | 0.03 kg/m² | 1.000 |
 
-参考 GRIB 的合成反射率是 0，因为这个 wrfout 的 `REFL_10CM` 全是 0，而 NCAR+Thompson 的写出路径用的就是它。1 km 诊断反射率约 −10 dBZ，参考记录却是 0。最佳 CAPE 有约 0.2% 的格点因查表和直接求解选层不同，RMSE 约 100 J/kg。
+参考 GRIB 的合成反射率是 0，因为这个 wrfout 的 `REFL_10CM` 全是 0，而 NCAR+Thompson 的写出路径用的就是它。1 km 反射率的公式下限裸算约 −10 dBZ，写出时晴空记为 0，和参考场一致。最佳 CAPE 有约 0.2% 的格点因查表和直接求解选层不同，RMSE 约 100 J/kg。
 
 ```bash
 python scripts/validate_against_upp.py --wrfout wrfout_d01 --grib WRFPRS_d01.00

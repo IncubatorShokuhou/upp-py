@@ -28,6 +28,6 @@ PRMSL 是 ``NGMSLP.f`` 的 Shuell 订正（可用场 105）。膜法是 MSLET，
 
 0–1 km 和 0–3 km 螺旋度与 ``CALHEL.f`` 一致。可降水量按 ``CALPW.f`` 只积分水汽。这个时次的累积降水两边都是 0。
 
-合成反射率按 NCAR + Thompson 的写出路径，取模式 ``REFL_10CM`` 的柱最大。该变量在这个文件里全是 0，所以两边都是 0，相关系数没有定义。1 km 反射率用的是 Stoelinga 诊断，晴空约 −10 dBZ；参考 GRIB 整场为 0，bias 因此是 −10。unipost 日志里的 ``dbze_max`` 约 1 dBZ，说明诊断算过，但没有写进 REFC 那条记录。
+合成反射率按 NCAR + Thompson 的写出路径，取模式 ``REFL_10CM`` 的柱最大。该变量在这个文件里全是 0，所以两边都是 0，相关系数没有定义。unipost 日志里的 ``dbze_max`` 约 1 dBZ，说明诊断算过，但没有写进 REFC 那条记录。1 km 反射率的 Stoelinga 公式有 0.1 mm\ :sup:`6` m\ :sup:`−3` 的对流下限，裸算约 −10 dBZ；写出的 REFD 把晴空和低于 0 dBZ 的值记为 0，这是有意的。这份 GRIB 的 1 km 场整场为 0，两边因此一致。
 
 整场为常数时相关系数没有定义，表里是 nan。

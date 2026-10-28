@@ -112,9 +112,9 @@
      - nan
    * - REFD 1 km
      - dBZ
-     - -10
-     - 10
-     - 10
+     - 0
+     - 0
+     - 0
      - nan
    * - CAPE surface
      - J/kg
