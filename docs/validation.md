@@ -45,8 +45,7 @@ Carr Fire `wrfout_d01_2018-07-23_21_00_00`（WRF-ARW 4.7.1，199×199×79，3 km
   这些场和 250/500 hPa 的高度、温度几乎只剩 GRIB 打包误差。
 - 850 hPa 有少量点落在地下外推里，温度最大差约 3 K，高度最大差约 11 m，相关系数仍高于 0.999。
 - **CAPE/CIN**：地面、混合层（0–90 hPa）和最不稳定（搜索 300 hPa，GRIB 层标成 255 hPa）与 `CALCAPE.f` 很接近。
-  最佳气块（六个 30 hPa 层里 Bolton θe 最大的一层）有约 0.2% 的格点选层不同，把 RMSE 拉到约 100 J/kg；99 分位绝对差约 20 J/kg。
-  原因是 `CALCAPE` 用查表反演湿绝热，这里直接解同一公式，θe 极接近时选层可能差一层。
+  最佳气块（六个 30 hPa 层里 Bolton θe 最大的一层）和 unipost.exe 的剩余差别是预期的，也是有意保留的。upp-py 直接解湿绝热和 Bolton θe，UPP 的 `CALCAPE` 用查表。θe 极接近时两边可能选到相邻一层。约 0.2% 的格点选层不同，RMSE 约 100 J/kg，99 分位绝对差约 20 J/kg。
 - **HLCY** 0–1 km 和 0–3 km 与 `CALHEL.f`（Bunkers）一致，差在打包误差。
 - **PWAT** 按 `CALPW.f`（`IDECID<=1`，只积分水汽）计算。
 - **APCP** 在这个时次是模式起始时刻，`RAINC+RAINNC` 为 0，和 GRIB 的 0–0 累积一致。
