@@ -1,0 +1,37 @@
+# upp-py 场清单。短名按 GRIB2。
+# 海平面气压：PRMSL 是 Shuell（NGMSLP），MSLET 是膜法（MEMSLP）。
+fields:
+  - PRMSL
+  - MSLET
+  - HGT
+  - TMP
+  - DPT
+  - RH
+  - SPFH
+  - UGRD
+  - VGRD
+  - VVEL
+  - ABSV
+  - TMP2M
+  - DPT2M
+  - RH2M
+  - UGRD10M
+  - VGRD10M
+  - REFC
+  - REFD
+  - CAPE
+  - CIN
+  - LCL
+  - LFC
+  - HLCY
+  - USTM
+  - VSTM
+  - PWAT
+  - APCP
+  - PRATE
+  - TCDC
+  - LCDC
+  - MCDC
+  - HCDC
+pressure_hpa: [250, 500, 700, 850, 925, 1000]
+reflectivity_agl_m: [1000, 4000]

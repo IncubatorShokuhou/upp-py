@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "upp-py"
+version = "0.1.0"
+description = "Pure-Python WRF-ARW post-processor following NOAA/DTC UPP v4.1 algorithms"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "upp-py contributors" }]
+dependencies = [
+  "numpy>=1.24",
+  "xarray>=2023.1",
+  "netCDF4>=1.6",
+  "scipy>=1.10",
+  "PyYAML>=6",
+]
+
+[project.optional-dependencies]
+grib = ["cfgrib>=0.9.10", "eccodes>=1.5"]
+docs = [
+  "sphinx>=7",
+  "pydata-sphinx-theme>=0.15",
+  "numpydoc>=1.6",
+  "sphinx-gallery>=0.15",
+  "sphinx-copybutton>=0.5",
+  "matplotlib>=3.7",
+]
+dev = ["pytest>=7"]
+
+[project.scripts]
+upp-py = "upp_py.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

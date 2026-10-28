@@ -1,0 +1,6 @@
+sphinx>=7
+pydata-sphinx-theme>=0.15
+numpydoc>=1.6
+sphinx-gallery>=0.15
+sphinx-copybutton>=0.5
+matplotlib>=3.7
