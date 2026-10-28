@@ -135,7 +135,7 @@ class PostConfig:
         than one time is read, and also for a single time (clamped to
         the forecast start).
     brtmp_satellite
-        CRTM sensor id passed to ``upp_crtm.brightness_temperature``
+        CRTM sensor id passed to ``crtm_py.brightness_temperature``
         when ``BRTMP`` is requested. ``abi_g16``, ``abi_g17``, or
         ``abi_gr``, matching ``CALRAD_WCLOUD_newcrtm.f``.
     brtmp_channels
@@ -236,7 +236,7 @@ fields:
 pressure_hpa: [250, 500, 700, 850, 925, 1000]
 reflectivity_agl_m: [1000, 4000]
 # accum_hours: 1
-# BRTMP needs the separate upp-crtm package. Uncomment when it is installed.
+# BRTMP needs https://github.com/IncubatorShokuhou/crtm-py . Uncomment when it is installed.
 #  - BRTMP
 # brtmp_satellite: abi_g16
 # brtmp_channels: [7, 8, 9, 10, 11, 12, 13, 14, 15, 16]

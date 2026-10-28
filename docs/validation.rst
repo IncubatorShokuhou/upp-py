@@ -32,4 +32,4 @@ PRMSL 是 ``NGMSLP.f`` 的 Shuell 订正（可用场 105）。膜法是 MSLET，
 
 整场为常数时相关系数没有定义，表里是 nan。
 
-这张表没有能见度、结冰类别、气溶胶和亮温。该时次是起报时刻。这个 wrfout 是 ``mp_physics=8``，没有 ``PREC_ACC_*`` 和 ``smoke``。``QNWFA`` 只在 ``imp_physics==28`` 时读。亮温由独立包 ``upp-crtm`` 计算，这份对比没有装它。VIS 和 TIPD 已按 ``CALVIS`` / ``CALICING`` 实现，没有和这份 GRIB 逐场对过。
+这张表没有能见度、结冰类别、气溶胶和亮温。该时次是起报时刻。这个 wrfout 是 ``mp_physics=8``，没有 ``PREC_ACC_*`` 和 ``smoke``。``QNWFA`` 只在 ``imp_physics==28`` 时读。亮温由独立包 ``crtm-py`` 计算，这份对比没有装它。VIS 和 TIPD 已按 ``CALVIS`` / ``CALICING`` 实现，没有和这份 GRIB 逐场对过。

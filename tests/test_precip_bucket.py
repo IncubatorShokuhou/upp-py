@@ -95,4 +95,4 @@ def test_dataset_writes_bucket_and_records_a_skip():
     assert "apcp_bucket" not in missing
     assert "APCP_BUCKET" in missing.attrs["skipped"]
     assert "BRTMP" in missing.attrs["skipped"]
-    assert "upp_crtm" in missing.attrs["skipped"]
+    assert "crtm_py" in missing.attrs["skipped"]

@@ -152,7 +152,7 @@ def _add_aerosols(state: WrfState, cfg: PostConfig, data_vars: dict, coords: dic
 
 
 def _add_brtmp(state: WrfState, cfg: PostConfig, data_vars: dict, coords: dict, notes: list[str]) -> None:
-    """Write ``brtmp`` when ``upp_crtm`` is installed. Otherwise record a skip."""
+    """Write ``brtmp`` when ``crtm_py`` is installed. Otherwise record a skip."""
     try:
         tb = compute_brtmp(state, satellite=cfg.brtmp_satellite, channels=cfg.brtmp_channels)
     except Exception as exc:

@@ -13,7 +13,7 @@
 
    pip install -e ".[grib]"
 
-亮温 BRTMP 用另一个可选包 ``upp-crtm``，不随 upp-py 发布，CI 也不装它：
+亮温 BRTMP 用仓库 https://github.com/IncubatorShokuhou/crtm-py 里的包 crtm-py，CI 不装它：
 
 .. code-block:: bash
 

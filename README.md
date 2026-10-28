@@ -73,7 +73,7 @@ Carr Fire（2018-07-23 21:00，199×199×79，3 km）对同一文件上的 `unip
 
 参考 GRIB 的合成反射率是 0，因为这个 wrfout 的 `REFL_10CM` 全是 0，而 NCAR+Thompson 的写出路径用的就是它。1 km 反射率的公式下限裸算约 −10 dBZ，写出时晴空记为 0，和参考场一致。最佳 CAPE 有约 0.2% 的格点因查表和直接求解选层不同，RMSE 约 100 J/kg。
 
-亮温 `BRTMP` 在独立包 `upp-crtm` 里算。没装时请求该场只记 `skipped`，本仓库不带 CRTM 源码或系数。`CALVIS_GSD` 和 NCAR GFIP 不算。能见度用 `CALVIS`，结冰类别用 `CALICING`。细节在 `docs/`。
+亮温 `BRTMP` 在 [crtm-py](https://github.com/IncubatorShokuhou/crtm-py) 里算（导入 `crtm_py.brightness_temperature`）。没装时请求该场只记 `skipped`，本仓库不带 CRTM 源码或系数。`CALVIS_GSD` 和 NCAR GFIP 不算。能见度用 `CALVIS`，结冰类别用 `CALICING`。细节在 `docs/`。
 
 ```bash
 python scripts/validate_against_upp.py --wrfout wrfout_d01 --grib WRFPRS_d01.00

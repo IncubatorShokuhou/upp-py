@@ -6,11 +6,12 @@ are ``abi_g16`` and ``abi_g17``. Each posts ABI infrared channels 7-16
 (ten fields, ``IGET`` 927-936 and 937-946). Nadir ``abi_gr`` is
 ``IGET`` 958-967. The forward model is CRTM.
 
-That model is not part of upp-py. Install the separate package
-``upp-crtm`` (import name ``upp_crtm``) and call
-``upp_crtm.brightness_temperature``. This module only locates that
-function. It does not ship CRTM source, coefficient files, or a
-``TSK**4`` substitute.
+That model is not part of upp-py. It lives in
+https://github.com/IncubatorShokuhou/crtm-py (distribution ``crtm-py``,
+import ``crtm_py``). This module is a thin adapter around
+``crtm_py.brightness_temperature``. The crtm-py README does not publish
+another entry point yet. upp-py does not ship CRTM source, coefficient
+files, or a ``TSK**4`` substitute.
 
 Expected signature::
 
@@ -49,7 +50,7 @@ GFIP_NOTE = (
     "The isobaric icing product is CALICING / TIPD (field 257)."
 )
 
-_PACKAGE = "upp_crtm"
+_PACKAGE = "crtm_py"
 _ENTRY = "brightness_temperature"
 
 BrightnessFn = Callable[..., np.ndarray]
@@ -60,7 +61,7 @@ class BrtmpUnavailable(RuntimeError):
 
 
 def skip_reason() -> str:
-    """Why ``BRTMP`` is omitted when ``upp_crtm`` is not installed."""
+    """Why ``BRTMP`` is omitted when ``crtm_py`` is not installed."""
     return (
         "CALRAD_WCLOUD_newcrtm.f BRTMP (GOES ABI IR channels 7-16) is computed by "
         f"the separate package {_PACKAGE}.{_ENTRY}. It is not installed. "
@@ -69,7 +70,7 @@ def skip_reason() -> str:
 
 
 def load_brightness_temperature() -> BrightnessFn | None:
-    """Return ``upp_crtm.brightness_temperature``, or ``None`` if absent."""
+    """Return ``crtm_py.brightness_temperature``, or ``None`` if absent."""
     try:
         module = importlib.import_module(_PACKAGE)
     except ImportError:

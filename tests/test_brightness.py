@@ -1,4 +1,4 @@
-"""BRTMP stays behind the optional upp_crtm import."""
+"""BRTMP stays behind the optional crtm_py import."""
 
 import numpy as np
 
@@ -11,14 +11,14 @@ from upp_py.post import dataset_from_state
 def test_package_is_absent_in_the_default_environment():
     assert load_brightness_temperature() is None
     text = skip_reason()
-    assert "upp_crtm.brightness_temperature" in text
+    assert "crtm_py.brightness_temperature" in text
     assert "TSK" not in text
 
 
 def test_request_without_package_is_a_skip():
     ds = dataset_from_state(_tiny_state(), PostConfig(fields=("BRTMP",)))
     assert "brtmp" not in ds
-    assert "upp_crtm" in ds.attrs["skipped"]
+    assert "crtm_py" in ds.attrs["skipped"]
 
 
 def test_installed_callable_is_written(monkeypatch):
