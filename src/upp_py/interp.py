@@ -15,13 +15,29 @@ UPP indexes ``L = 1`` at the model top. This module keeps WRF order
 
   with the factor clipped to ``[-10, 10]`` (the NCAR/NMM branch).
 
-* Below the ground (``p_t > p_{sfc}``), temperature follows a constant
+* Below the lowest mass level but still above the ground
+  (``p_t < p_{sfc}``), the same ``ln p`` formula extrapolates downward.
+  That branch is what keeps an isobaric surface continuous across a
+  ridge whose surface pressure is only slightly larger than the target.
+* Below the ground (``p_t >= p_{sfc}``), temperature follows a constant
   virtual-temperature lapse from the average of the 2nd and 3rd model
-  layers above the ground (``RGAMOG`` in ``params.F``). Relative
-  humidity is held at that layer's value. Wind and omega are taken from
-  the lowest mass level. Height is integrated hydrostatically downward
-  from the next pressure level above, so levels must be processed from
-  the top of the atmosphere downward.
+  layers above the ground. The reference pressure is the interface
+  between those two layers (``PINT(LM-1)``). ``RGAMOG = R_d \\gamma / g``
+  with ``\\gamma = 6.5 \\times 10^{-3}`` K/m from ``params.F``. Relative
+  humidity is held at that layer's value, clipped to ``[RHmin, 1]``.
+  Wind and omega are taken from the lowest mass level. Height is the
+  hydrostatic step from the previous isobaric level
+
+  .. math::
+
+      \\Phi(p) = \\Phi(p_{prev})
+        - \\frac{R_d}{2}
+          \\big(T_v(p_{prev}) + T_v(p)\\big)
+          \\ln\\frac{p}{p_{prev}}
+
+  so levels must be processed from the top of the atmosphere downward.
+  Every grid point receives a value; underground points are filled,
+  not left missing.
 
 Height above ground is interpolated in ``ln p`` between interface
 heights ``(PH+PHB)/g``, which is the non-GFS branch of ``MDL2P.f``.
@@ -112,15 +128,23 @@ def _interface_height(state: WrfState, p_target: float) -> np.ndarray:
 
 
 def _underground_tq(state: WrfState, p_target: float) -> tuple[np.ndarray, np.ndarray]:
-    """Below-ground T and q from the 2nd/3rd layers, ``MDL2P.f``."""
-    # WRF k=1 is the 2nd layer from the ground, k=2 the 3rd.
+    """Below-ground T and q from the 2nd/3rd layers, ``MDL2P.f``.
+
+    ``PL`` is the interface between those layers. Relative humidity is
+    clipped to ``[RHmin, 1]`` and then held constant while virtual
+    temperature follows ``(p / PL) ** RGAMOG``.
+    """
+    # WRF k=0 is the lowest mass level (UPP L=LM). k=1 and k=2 are the
+    # 2nd and 3rd layers from the ground (UPP LM-1 and LM-2).
     t_l = 0.5 * (state.t[2] + state.t[1])
     q_l = 0.5 * (state.q[2] + state.q[1])
     p_l = state.p_int[2]
     qs = saturation_specific_humidity(t_l, p_l)
-    rh = q_l / np.maximum(qs, H1M12)
-    rh = np.clip(rh, RHMIN, 1.0)
-    q_l = rh * qs
+    rh = q_l / qs
+    too_wet = rh > 1.0
+    too_dry = rh < RHMIN
+    rh = np.where(too_wet, 1.0, np.where(too_dry, RHMIN, rh))
+    q_l = np.where(too_wet | too_dry, rh * qs, q_l)
     tv = t_l * (1.0 + D608 * q_l)
     tv_blo = tv * (p_target / p_l) ** RGAMOG
     t_blo = tv_blo / (1.0 + D608 * q_l)
@@ -157,7 +181,9 @@ def interpolate_pressure_levels(state: WrfState, pressures_pa: list[float] | tup
         u_int, _ = _logp_pair(state.p_mid, state.u, p_t)
         v_int, _ = _logp_pair(state.p_mid, state.v, p_t)
         w_int, _ = _logp_pair(state.p_mid, state.omega, p_t)
-        under = p_t > state.p_sfc
+        # MDL2P.f takes the underground branch unless the surface
+        # interface is strictly above the target (PINT(LP1) > SPL).
+        under = p_t >= state.p_sfc
 
         # RH clamp on the log-p branch only (MDL2P.f, not the above-top copy).
         in_column = ~above & ~under

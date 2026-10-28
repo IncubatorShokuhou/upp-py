@@ -170,22 +170,35 @@ def _optional3d(ds, name, itime, shape, fill=0.0) -> np.ndarray:
 
 
 def _smooth_vapor(pvapor: np.ndarray) -> np.ndarray:
-    """405-pass 8-point smoother from ``INITPOST.F`` (Jacobi, old field)."""
-    orig = pvapor.copy()
-    field = pvapor.copy()
-    ny, nx = field.shape
+    """405-pass 8-point smoother from ``INITPOST.F``.
+
+    The Fortran loop stores each interior point before moving to the next
+    ``i``, then the next ``j``, so the west and south neighbors are the
+    values just written. Boundaries keep the unsmoothed column through
+    all 405 passes, then take that original value plus the increment of
+    the adjacent interior point.
+    """
+    # y[i] = 4*AD05*y[i-1] + rest[i], with y[-1] the (fixed) west boundary.
+    from scipy.signal import lfilter
+
+    orig = np.array(pvapor, dtype=np.float64, copy=True)
+    field = orig.copy()
+    ny, _nx = field.shape
+    coef = 4.0 * AD05
     for _ in range(NVAPOR_SMOOTH):
-        c = field
-        new = AD05 * (
-            4.0 * (c[1:-1, 0:-2] + c[1:-1, 2:] + c[0:-2, 1:-1] + c[2:, 1:-1])
-            + c[0:-2, 0:-2]
-            + c[0:-2, 2:]
-            + c[2:, 0:-2]
-            + c[2:, 2:]
-        ) - CFT0 * c[1:-1, 1:-1]
-        field = field.copy()
-        field[1:-1, 1:-1] = new
-    # Boundaries: original plus the interior increment of the adjacent row.
+        for j in range(1, ny - 1):
+            south = field[j - 1]
+            north = field[j + 1]
+            row = field[j]
+            rest = AD05 * (
+                4.0 * (row[2:] + south[1:-1] + north[1:-1])
+                + south[:-2]
+                + south[2:]
+                + north[:-2]
+                + north[2:]
+            ) - CFT0 * row[1:-1]
+            updated, _zf = lfilter([1.0], [1.0, -coef], rest, zi=np.array([coef * float(row[0])]))
+            field[j, 1:-1] = updated
     out = field
     out[0, 1:-1] = orig[0, 1:-1] + (field[1, 1:-1] - orig[1, 1:-1])
     out[-1, 1:-1] = orig[-1, 1:-1] + (field[-2, 1:-1] - orig[-2, 1:-1])
@@ -295,8 +308,12 @@ def _load(ds: xr.Dataset, path: str, itime: int) -> WrfState:
         pvapor = pvapor + G * rho * dz * qmean
     pvapor = _smooth_vapor(pvapor)
     p_sfc = p_dry + pvapor
-    # Keep the surface interface above the lowest mid-level pressure.
-    p_sfc = np.maximum(p_sfc, p_mid[0] * 1.001)
+    # INITPOST.F: if the interface between the lowest two mass levels
+    # (PINT(LM)) sits at or below the surface, push the surface to
+    # 1.001 * that interface. Do not clamp to the lowest mass pressure.
+    if nz >= 2:
+        p_iface = 0.5 * (p_mid[0] + p_mid[1])
+        p_sfc = np.where(p_iface >= p_sfc, p_iface * 1.001, p_sfc)
 
     p_int = np.empty((nz + 1, ny, nx), dtype=np.float64)
     p_int[0] = p_sfc

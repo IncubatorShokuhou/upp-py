@@ -105,6 +105,42 @@ def test_flat_terrain_slp_is_surface_pressure():
     np.testing.assert_allclose(pslp, state.p_sfc)
 
 
+def test_just_above_ground_stays_on_logp():
+    state = _tiny_state()
+    # Lowest mass level is 950 hPa, surface is 1000 hPa. 970 hPa is below
+    # the mass level and still above the ground, so MDL2P keeps log-p.
+    p_t = 97000.0
+    levels = interpolate_pressure_levels(state, [p_t])
+    p_lo, p_hi = state.p_mid[0, 0, 0], state.p_mid[1, 0, 0]
+    fact = (np.log(p_t) - np.log(p_lo)) / (np.log(p_lo) - np.log(p_hi))
+    expected = state.t[0] + (state.t[0] - state.t[1]) * fact
+    np.testing.assert_allclose(levels[0].temperature, expected, rtol=1e-6, atol=1e-4)
+    assert not np.any(levels[0].underground)
+
+
+def test_below_ground_uses_second_and_third_layers():
+    from upp_py.constants import D608, RGAMOG
+    from upp_py.thermo import saturation_specific_humidity
+
+    state = _tiny_state(p_sfc=np.full((4, 4), 80000.0))
+    state.p_int[0] = state.p_sfc
+    p_t = 85000.0
+    levels = interpolate_pressure_levels(state, [70000.0, p_t])
+    under = [lv for lv in levels if lv.pressure == p_t][0]
+    assert np.all(under.underground)
+    t_l = 0.5 * (state.t[2] + state.t[1])
+    q_l = 0.5 * (state.q[2] + state.q[1])
+    p_l = state.p_int[2]
+    qs = saturation_specific_humidity(t_l, p_l)
+    rh = np.clip(q_l / qs, 1.0e-6, 1.0)
+    q_use = np.where((q_l / qs > 1.0) | (q_l / qs < 1.0e-6), rh * qs, q_l)
+    tv = t_l * (1.0 + D608 * q_use)
+    t_blo = tv * (p_t / p_l) ** RGAMOG / (1.0 + D608 * q_use)
+    np.testing.assert_allclose(under.temperature, t_blo, rtol=1e-6, atol=1e-4)
+    # Wind is copied from the lowest mass level.
+    np.testing.assert_allclose(under.u, state.u[0])
+
+
 def test_underground_temperature_is_finite():
     terrain = np.full((4, 4), 2500.0)
     # Raise the ground. Surface pressure well below 1000 hPa.
