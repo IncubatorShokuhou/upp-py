@@ -2,7 +2,7 @@
 
 WRF-ARW 后处理的纯 Python 实现，算法对齐 NOAA/DTC UPP v4.1（`EMC_post` 标签 `dtc_post_v4.1.0`，`sorc/ncep_post.fd`）。数值用 NumPy，读写 NetCDF 用 xarray。不调用 `unipost.exe`，也没有 Fortran/C 扩展。
 
-不追求和 GRIB 逐比特相同。公式、常数、对数气压插值、地下外推、Shuell / 膜法海平面气压、相对湿度和露点、CAPE 气块以及 Bunkers 螺旋度按 Fortran 来。
+不追求和 GRIB 逐比特相同。公式和常数按 Fortran 来，对数气压插值与地下外推也是。Shuell / 膜法海平面气压同样照 Fortran，相对湿度和露点、CAPE 气块以及 Bunkers 螺旋度也是。
 
 **English.** upp-py is a pure-Python WRF-ARW post processor. Numerics follow UPP v4.1 (not bit-for-bit). See `docs/` for the Sphinx site (`cd docs && make html`) and `docs/validation.md` for the Carr Fire comparison against `unipost.exe`.
 
@@ -32,10 +32,10 @@ write_netcdf(ds, "post.nc")
 
 | 产品 | Fortran |
 | --- | --- |
-| 读 wrfout、去交错、`P_HYD`、位温转温度、地面气压的水汽订正 | `INITPOST.F`, `getVariable.f` |
+| 读 wrfout 与去交错，含 `P_HYD`、位温转温度和地面气压的水汽订正 | `INITPOST.F`, `getVariable.f` |
 | 气压层 `ln p` 插值与地下外推 | `MDL2P.f` |
 | `PRMSL`（Shuell）和 `MSLET`（膜法） | `NGMSLP.f`, `SLP_new.f` |
-| 相对湿度、露点、可降水量 | `CALRH.f`, `CALDWP.f`, `DEWPOINT.f`, `CALPW.f` |
+| 相对湿度、露点与可降水量 | `CALRH.f`, `CALDWP.f`, `DEWPOINT.f`, `CALPW.f` |
 | 2 m 温湿、10 m 风 | `SURFCE.f` |
 | 累积降水与降水率 | `INITPOST.F`, `SURFCE.f` |
 | Thompson 反射率；NCAR 的合成反射率取 `REFL_10CM` 柱最大 | `MDLFLD.f`, `PARAMR.f` |

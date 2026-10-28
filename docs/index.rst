@@ -3,7 +3,7 @@ upp-py
 
 upp-py 用纯 Python 复现 NOAA/DTC UPP v4.1（``dtc_post_v4.1.0``）里 WRF-ARW 这一支的后处理。数值用 NumPy，读 ``wrfout``、写 NetCDF 用 xarray。它不调用 ``unipost.exe``，也不包一层 Fortran。
 
-目标是算法一致：同一套公式、常数、插值和下地下外推。输出不追求和 GRIB 逐比特相同。GRIB 打包、查表量化会留下可以量出来的小数差。
+算法一致，依据同一套公式与常数，也依据插值和下地下外推。输出不追求和 GRIB 逐比特相同。GRIB 打包、查表量化会留下可以量出来的小数差。
 
 .. toctree::
    :maxdepth: 2

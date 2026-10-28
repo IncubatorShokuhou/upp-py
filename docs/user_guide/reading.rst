@@ -43,7 +43,7 @@ v4.1 的气压用 ``P_HYD``，不再把 ``P`` 和 ``PB`` 加起来。文件里�
 投影
 ----
 
-从全局属性读 ``MAP_PROJ``、``TRUELAT1``、``TRUELAT2``、``STAND_LON``、``CEN_LAT``、``DX``、``DY``。1 是 Lambert，2 是极射赤面，3 是 Mercator。``MAPFAC_M`` 用来把名义格距换成当地格距：``\Delta x = DX / m``。经纬度用质量点上的 ``XLAT``、``XLONG``。
+从全局属性读 ``MAP_PROJ``、``TRUELAT1`` 和 ``TRUELAT2``，以及 ``STAND_LON``、``CEN_LAT``，还有 ``DX`` 与 ``DY``。1 是 Lambert，2 是极射赤面，3 是 Mercator。``MAPFAC_M`` 用来把名义格距换成当地格距：``\Delta x = DX / m``。经纬度用质量点上的 ``XLAT``、``XLONG``。
 
 有效时间来自 ``Times``，起报时间来自 ``START_DATE``。预报时效是两者之差，这个个例的起始时刻和有效时刻相同，所以是 fhr 00。
 

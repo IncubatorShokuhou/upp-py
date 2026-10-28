@@ -1,7 +1,7 @@
 安装
 ====
 
-需要 Python 3.10 及以上。核心依赖是 NumPy、xarray、netCDF4、SciPy 和 PyYAML。没有 Fortran 或 C 扩展。
+需要 Python 3.10 及以上。核心依赖是 NumPy 和 xarray、netCDF4，以及 SciPy 与 PyYAML。没有 Fortran 或 C 扩展。
 
 .. code-block:: bash
 

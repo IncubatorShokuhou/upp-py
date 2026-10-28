@@ -6,7 +6,7 @@
 Thompson / Stoelinga
 --------------------
 
-雨、雪、霰用指数谱。雨的反射率因子（先以 m\ :sup:`6` m\ :sup:`−3` 计，再乘 ``10^{18}`` 换成 mm\ :sup:`6` m\ :sup:`−3`）：
+雨、雪与霰用指数谱。雨的反射率因子（先以 m\ :sup:`6` m\ :sup:`−3` 计，再乘 ``10^{18}`` 换成 mm\ :sup:`6` m\ :sup:`−3`）：
 
 .. math::
 
@@ -19,7 +19,7 @@ Thompson / Stoelinga
 写出的合成反射率
 ----------------
 
-NCAR（以及 NMM、FV3）加上 Thompson 时，写进 GRIB 的合成反射率不是上面这个诊断，而是模式变量 ``REFL_10CM`` 的柱最大，再限制在 ``[-20, 80]`` dBZ。Carr Fire 的 wrfout 里 ``REFL_10CM`` 全是 0，参考 GRIB 的 ``REFC`` 因此也是 0。unipost 日志里的 ``dbze_max`` 是诊断值，大约 1 dBZ，没有写到这条记录上。
+NCAR（以及 NMM、FV3）加上 Thompson 时，写进 GRIB 的合成反射率是模式变量 ``REFL_10CM`` 的柱最大，再限制在 ``[-20, 80]`` dBZ。Carr Fire 的 wrfout 里 ``REFL_10CM`` 全是 0，参考 GRIB 的 ``REFC`` 因此也是 0。unipost 日志里的 ``dbze_max`` 是诊断值，大约 1 dBZ，没有写到这条记录上。
 
 1 km 和 4 km 高度上，非 RAP 的分支用的是诊断值：从地面往上，第一个顶界面超过该高度的质量层。RAP/HRRR 才会直接读 ``REFL_10CM_1KM``。这个个例的参考 GRIB 把 1 km 反射率写成了 0，和诊断值的 −10 dBZ 对不上，验证页里单独说明了。
 
