@@ -12,6 +12,7 @@ API 参考
 
    upp_py.post_wrfout
    upp_py.write_netcdf
+   upp_py.write_grib2
    upp_py.load_config
    upp_py.PostConfig
 
@@ -51,3 +52,9 @@ API 参考
    upp_py.reflectivity.reflectivity
    upp_py.clouds.cloud_fraction
    upp_py.vorticity.absolute_vorticity
+   upp_py.visibility.surface_visibility
+   upp_py.icing.in_flight_icing
+   upp_py.precip.continuous_total_mm
+   upp_py.precip.bucket_total_mm
+   upp_py.precip.window_accumulation_mm
+   upp_py.aerosol.mass_concentration

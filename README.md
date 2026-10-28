@@ -10,7 +10,7 @@ WRF-ARW 后处理的纯 Python 实现，算法对齐 NOAA/DTC UPP v4.1（`EMC_po
 
 ```bash
 pip install -e ".[dev]"
-# 只在和参考 GRIB 对比时需要
+# 读参考 GRIB，以及写出 GRIB2。eccodes 的 wheel 自带 C 库。
 pip install -e ".[grib]"
 ```
 
@@ -19,13 +19,15 @@ pip install -e ".[grib]"
 ```bash
 upp-py wrfout_d01_2018-07-23_21_00_00 -o post.nc
 upp-py wrfout_d01_2018-07-23_21_00_00 -o post.nc --config configs/example.yaml
+upp-py wrfout_d01 -o post.nc --grib2 post.grib2 --times 0,1,2 --accum-hours 1
 ```
 
 ```python
-from upp_py import load_config, post_wrfout, write_netcdf
+from upp_py import load_config, post_wrfout, write_grib2, write_netcdf
 
 ds = post_wrfout("wrfout_d01_2018-07-23_21_00_00", load_config("configs/example.yaml"))
 write_netcdf(ds, "post.nc")
+write_grib2(ds, "post.grib2")
 ```
 
 ## 做了什么
@@ -37,7 +39,9 @@ write_netcdf(ds, "post.nc")
 | `PRMSL`（Shuell）和 `MSLET`（膜法） | `NGMSLP.f`, `SLP_new.f` |
 | 相对湿度、露点与可降水量 | `CALRH.f`, `CALDWP.f`, `DEWPOINT.f`, `CALPW.f` |
 | 2 m 温湿、10 m 风 | `SURFCE.f` |
-| 累积降水与降水率 | `INITPOST.F`, `SURFCE.f` |
+| 累积降水、`PREC_ACC_*` 桶、`bucket_mm` 计数器 | `INITPOST.F`, `SURFCE.f` |
+| 能见度 `VIS`、结冰类别 `TIPD` | `CALVIS.f`, `AVIATION.f` `CALICING` |
+| 气溶胶数浓度与烟、550 nm 光学厚度（文件里有才写） | `INITPOST.F`, `MDLFLD.f` |
 | Thompson 反射率；NCAR 的合成反射率取 `REFL_10CM` 柱最大 | `MDLFLD.f`, `PARAMR.f` |
 | 地面 / 混合层 / 最佳 / 最不稳定 CAPE 与 CIN，LCL、LFC | `CALCAPE.f`, `BNDLYR.f`, `CLDRAD.f`, `MISCLN.f` |
 | 0–1 km、0–3 km 风暴相对螺旋度 | `CALHEL.f` |
@@ -68,6 +72,8 @@ Carr Fire（2018-07-23 21:00，199×199×79，3 km）对同一文件上的 `unip
 | PWAT | 0.03 kg/m² | 1.000 |
 
 参考 GRIB 的合成反射率是 0，因为这个 wrfout 的 `REFL_10CM` 全是 0，而 NCAR+Thompson 的写出路径用的就是它。1 km 反射率的公式下限裸算约 −10 dBZ，写出时晴空记为 0，和参考场一致。最佳 CAPE 有约 0.2% 的格点因查表和直接求解选层不同，RMSE 约 100 J/kg。
+
+亮温 `BRTMP` 要 CRTM 系数，不算。`CALVIS_GSD` 和 NCAR GFIP 也不算。能见度用 `CALVIS`，结冰类别用 `CALICING`。细节在 `docs/`。
 
 ```bash
 python scripts/validate_against_upp.py --wrfout wrfout_d01 --grib WRFPRS_d01.00

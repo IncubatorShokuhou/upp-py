@@ -15,8 +15,8 @@ sys.path.insert(0, os.path.abspath("../src"))
 
 project = "upp-py"
 author = "upp-py contributors"
-release = "0.1.0"
-version = "0.1"
+release = "0.2.0"
+version = "0.2"
 
 extensions = [
     "sphinx.ext.autodoc",

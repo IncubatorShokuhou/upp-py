@@ -53,3 +53,4 @@ Carr Fire `wrfout_d01_2018-07-23_21_00_00`（WRF-ARW 4.7.1，199×199×79，3 km
 - **REFC**：NCAR + Thompson（`mp_physics=8`）写出的是模式变量 `REFL_10CM` 的柱最大（`MDLFLD.f`）。这个 wrfout 里该变量全是 0，所以两边都是 0，相关系数没有定义。Stoelinga 诊断仍会算（unipost 日志里的 `dbze_max` 约 1 dBZ），但不会写进这条 REFC。
 - **REFD 1 km**：Stoelinga 公式里对流项不低于 0.1 mm6/m3，晴空裸算约 -10 dBZ。写出时把晴空和低于 0 dBZ 的值记为 0，这是有意的。参考 GRIB 的 1 km 场整场为 0，两边因此一致。
 - 整场为常数时（REFC、APCP）相关系数没有定义，表里写成 nan。
+- 这张表没有 VIS、TIPD、气溶胶和亮温。该时次是起报时刻，APCP 为 0；wrfout 是 `mp_physics=8`，没有 `PREC_ACC_*`、`smoke`、`QNWFA`（后者只在 `imp_physics==28` 时读取）。亮温 `BRTMP` 需要 CRTM 系数，不算。结冰类别 `TIPD` 和能见度 `VIS` 已按 `CALICING` / `CALVIS` 实现，没有和这份 GRIB 逐场对过。

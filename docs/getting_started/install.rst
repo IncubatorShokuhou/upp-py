@@ -7,7 +7,7 @@
 
    pip install -e ".[dev]"
 
-和参考 GRIB 对比时再装读 GRIB 的库。它们只在验证脚本里用，不参与后处理本身：
+读参考 GRIB、以及自己写 GRIB2，用同一个可选依赖。算法仍是 NumPy，不调用 ``unipost.exe``。``eccodes`` 的 wheel 带 C 库。
 
 .. code-block:: bash
 
