@@ -117,6 +117,26 @@ class WrfState:
     qncloud: np.ndarray | None = None
     # WRF-Chem / GOCART arrays keyed by the wrfout name, when present.
     aerosols: dict = field(default_factory=dict)
+    # Fields CALRAD_WCLOUD_newcrtm.f reads for ABI brightness temperature.
+    # Missing arrays stay None; the brightness-temperature caller treats
+    # that the same way UPP treats a failed getVariable (zero / default).
+    tsk: np.ndarray | None = None
+    xland: np.ndarray | None = None
+    ivgtyp: np.ndarray | None = None
+    ivegsrc: int = 1
+    veg_fraction: np.ndarray | None = None
+    snow_fraction: np.ndarray | None = None
+    snow_depth_mm: np.ndarray | None = None
+    seaice: np.ndarray | None = None
+    smstot: np.ndarray | None = None
+    o3: np.ndarray | None = None
+    qnr: np.ndarray | None = None
+    qni: np.ndarray | None = None
+    f_rimef: np.ndarray | None = None
+    cu_physics: int = 0
+    hbot: np.ndarray | None = None
+    htop: np.ndarray | None = None
+    cnvcfr: np.ndarray | None = None
     attrs: dict = field(default_factory=dict)
 
     @property
@@ -417,6 +437,38 @@ def _load(ds: xr.Dataset, path: str, itime: int) -> WrfState:
         arr = _maybe(ds, key, itime)
         if arr is not None:
             aerosols[key] = arr
+    tsk = _maybe(ds, "TSK", itime)
+    xland = _maybe(ds, "XLAND", itime)
+    ivg_raw = _maybe(ds, "IVGTYP", itime)
+    ivgtyp = None if ivg_raw is None else np.rint(ivg_raw).astype(np.int64)
+    veg = _maybe(ds, "VEGFRA", itime)
+    if veg is not None and np.nanmax(veg) > 1.5:
+        # INITPOST.F stores VEGFRA/100. Values already in [0, 1] are left alone.
+        veg = veg / 100.0
+    snowc = _maybe(ds, "SNOWC", itime)
+    if snowc is not None and np.nanmax(snowc) > 1.5:
+        snowc = snowc / 100.0
+    snowh = _maybe(ds, "SNOWH", itime)
+    if snowh is not None:
+        # INITPOST.F: SI = min(max(SNOWH, 0), 50) * 1000 mm.
+        snowh = np.clip(snowh, 0.0, 50.0) * 1000.0
+    seaice = _maybe(ds, "SEAICE", itime)
+    smstot = _maybe(ds, "SMSTOT", itime)
+    o3 = _get3d(ds, "O3", itime)
+    if o3 is None:
+        o3 = _get3d(ds, "OZONE", itime)
+    qnr = _get3d(ds, "QNRAIN", itime)
+    qni = _get3d(ds, "QNICE", itime)
+    f_rimef = _get3d(ds, "F_RIMEF", itime)
+    hbot = _maybe(ds, "HBOT", itime)
+    htop = _maybe(ds, "HTOP", itime)
+    cnvcfr = _maybe(ds, "CNVCFR", itime)
+    mminlu = ds.attrs.get("MMINLU", "")
+    if isinstance(mminlu, bytes):
+        mminlu = mminlu.decode()
+    ivegsrc = 0 if "USGS" in str(mminlu).upper() else 1
+    cu_raw = _attr_float(ds, "CU_PHYSICS")
+    cu_physics = 0 if cu_raw is None else int(cu_raw)
 
     # 2 m temperature: TH2 is potential temperature; SURFCE.f converts
     # with shelter pressure, not PSFC.
@@ -503,5 +555,22 @@ def _load(ds: xr.Dataset, path: str, itime: int) -> WrfState:
         qnifa=_maybe(ds, "QNIFA", itime),
         qncloud=_maybe(ds, "QNCLOUD", itime),
         aerosols=aerosols,
+        tsk=tsk,
+        xland=xland,
+        ivgtyp=ivgtyp,
+        ivegsrc=ivegsrc,
+        veg_fraction=veg,
+        snow_fraction=snowc,
+        snow_depth_mm=snowh,
+        seaice=seaice,
+        smstot=smstot,
+        o3=o3,
+        qnr=qnr,
+        qni=qni,
+        f_rimef=f_rimef,
+        cu_physics=cu_physics,
+        hbot=hbot,
+        htop=htop,
+        cnvcfr=cnvcfr,
         attrs={k: (v.decode() if isinstance(v, bytes) else v) for k, v in ds.attrs.items() if isinstance(v, (str, bytes, int, float, np.number))},
     )

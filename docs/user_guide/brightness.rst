@@ -3,15 +3,30 @@
 
 ``CALRAD_WCLOUD_newcrtm.f`` 用 CRTM 算卫星亮温，GRIB 短名 BRTMP。GOES-16 是传感器 ``abi_g16``（``IGET`` 927–936），GOES-17 是 ``abi_g17``（937–946），天底 ``abi_gr`` 是 958–967。每一组都是 ABI 红外通道 7 到 16。
 
-正演和系数在 `crtm-py <https://github.com/IncubatorShokuhou/crtm-py>`_。发行名 ``crtm-py``，导入名 ``crtm_py``。那个仓库的 README 还没有别的入口，upp-py 调用 ``crtm_py.brightness_temperature``。函数要接收 ``state``、``satellite``、``channels``，返回形状 ``(通道数, ny, nx)`` 的开尔文数组。系数或 CRTM 库缺失时，那个包应抛出 ``RuntimeError``，原因会进数据集属性 ``skipped``，不写出 ``brtmp``。
+正演在 https://github.com/IncubatorShokuhou/crtm-py 。发行名 crtm-py，导入名 ``crtm_py``。还没有发到 PyPI。可选依赖写的是
 
-没装这个包时同样只记 ``skipped``，后处理其余的场照常写。不用皮肤温度代替亮温。
+.. code-block:: text
+
+   crtm-py @ git+https://github.com/IncubatorShokuhou/crtm-py
 
 .. code-block:: bash
 
    pip install -e ".[crtm]"
 
-``crtm-py`` 还不能从索引装上时，这条安装会失败。CI 不装这个可选依赖。
+upp-py 把 wrfout 的自下而上气压、温度、比湿、水成物和地表交给 ``crtm_py.brightness_temperature``。层序翻转、水汽改成 g/kg、臭氧下限、``EFFR``、陆地类型和 ``GEO_ZENITH_ANGLE`` 都在 crtm-py 里，按 ``CALRAD_WCLOUD_newcrtm.f``。``abi_g16`` 的星下点是 0°N、75.2°W。散射打开，走 ADA。返回的亮温是 ``(ny, nx, 通道)``，这里转成 ``abi_channel`` 在前。
+
+没装 ``crtm_py``，或者目录里没有该传感器的 ``SpcCoeff.bin`` 和 ODPS ``TauCoeff.bin``，这个场不写，原因在数据集属性 ``skipped``。没有系数时 crtm-py 会用合成灰体，那个结果不当成 BRTMP。
+
+系数用 crtm-py 自己的命令下载，不放进 upp-py：
+
+.. code-block:: bash
+
+   crtm-py fetch --list
+   crtm-py fetch --yes
+
+``--yes`` 会下载 CRTM REL-2.4.0 的 fix 包，大约 3.4 GB。目录默认在 ``~/.cache/crtm-py/coefficients``，也可以设 ``CRTM_PY_COEFF_DIR``。
+
+CI 会 ``pip install -e ".[crtm]"``，不下载系数，所以 CI 里的 BRTMP 测试不跑正演。
 
 传感器和通道可以写在 YAML 里，默认是 GOES-16 的 7–16 通道：
 

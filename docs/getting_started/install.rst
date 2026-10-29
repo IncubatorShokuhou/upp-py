@@ -13,11 +13,7 @@
 
    pip install -e ".[grib]"
 
-亮温 BRTMP 用仓库 https://github.com/IncubatorShokuhou/crtm-py 里的包 crtm-py，CI 不装它：
-
-.. code-block:: bash
-
-   pip install -e ".[crtm]"
+亮温 BRTMP 用 https://github.com/IncubatorShokuhou/crtm-py ，发行名 crtm-py。``pip install -e ".[crtm]"`` 会从 git 安装它。系数另外用 ``crtm-py fetch`` 下载，见 :doc:`../user_guide/brightness`。
 
 文档用 Sphinx 和 pydata-sphinx-theme，和 scikit-learn 同一套主题。图集默认不读取 72 MB 的 wrfout；Carr Fire 那张图只有设置了 ``UPP_PY_WRFOUT`` 才会真正画个例。
 

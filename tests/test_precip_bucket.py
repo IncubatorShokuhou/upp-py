@@ -85,7 +85,10 @@ def test_window_falls_back_to_prec_acc_when_the_raw_total_drops():
     assert actual[1] == 1.0
 
 
-def test_dataset_writes_bucket_and_records_a_skip():
+def test_dataset_writes_bucket_and_records_a_skip(monkeypatch):
+    import upp_py.brightness as brightness
+
+    monkeypatch.setattr(brightness, "load_brightness_temperature", lambda: None)
     state = _at(0, rainc=0.0, prec=3.0)
     ds = dataset_from_state(state, PostConfig(fields=("APCP", "APCP_BUCKET")))
     np.testing.assert_allclose(ds["apcp"].values, 0.0)

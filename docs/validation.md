@@ -53,4 +53,28 @@ Carr Fire `wrfout_d01_2018-07-23_21_00_00`（WRF-ARW 4.7.1，199×199×79，3 km
 - **REFC**：NCAR + Thompson（`mp_physics=8`）写出的是模式变量 `REFL_10CM` 的柱最大（`MDLFLD.f`）。这个 wrfout 里该变量全是 0，所以两边都是 0，相关系数没有定义。Stoelinga 诊断仍会算（unipost 日志里的 `dbze_max` 约 1 dBZ），但不会写进这条 REFC。
 - **REFD 1 km**：Stoelinga 公式里对流项不低于 0.1 mm6/m3，晴空裸算约 -10 dBZ。写出时把晴空和低于 0 dBZ 的值记为 0，这是有意的。参考 GRIB 的 1 km 场整场为 0，两边因此一致。
 - 整场为常数时（REFC、APCP）相关系数没有定义，表里写成 nan。
-- 这张表没有 VIS、TIPD、气溶胶和亮温。该时次是起报时刻，APCP 为 0；wrfout 是 `mp_physics=8`，没有 `PREC_ACC_*`、`smoke`、`QNWFA`（后者只在 `imp_physics==28` 时读取）。亮温 `BRTMP` 由独立包 `crtm-py` 计算，这份对比没有装它。结冰类别 `TIPD` 和能见度 `VIS` 已按 `CALICING` / `CALVIS` 实现，没有和这份 GRIB 逐场对过。
+- 这张表没有 VIS、TIPD、气溶胶和亮温。该时次是起报时刻，APCP 为 0；wrfout 是 `mp_physics=8`，没有 `PREC_ACC_*`、`smoke`、`QNWFA`（后者只在 `imp_physics==28` 时读取）。结冰类别 `TIPD` 和能见度 `VIS` 已按 `CALICING` / `CALVIS` 实现，没有和这份 GRIB 逐场对过。
+## ABI G16 亮温
+
+wrfout 用的是 Hugging Face `deepguess/wrf-250m-severe-weather` 里的 `carr_fire/wrfout_d01_2018-07-23_21_00_00`（72 MB，199×199×79，`mp_physics=8`）。系数是 `crtm-py fetch --release 2.4.0-jedi --sensors abi_g16`，JCSDA 2.4.0 的 ABI `SpcCoeff` / ODPS `TauCoeff`、`CloudCoeff` 和 Nalli / NPOESS 发射率。upp-py 调用 `crtm_py.brightness_temperature`，散射打开。
+
+**没有和 unipost 逐通道相减的表。** 这台机器上没有 `unipost.exe`。UPP v4.1 的 `sorc/build_ncep_post.sh` 只在 theia、jet、wcoss、hera 上 `module load post/v8.0.0-<机器名>`。社区的 `./compile` 还要先 `./configure`，再编 `sorc/comlibs`（里面有 CRTM）和 `ncep_post`。这些库原来都不在。后来装了 gfortran 13.3，仍然没有 bacio、w3、g2 和编好的 CRTM，所以没有编出 unipost，也没有写出 GOES-16 亮温。数据集里没有 `WRFPRS` GRIB。`ush/link_crtm_fix.sh` 默认只链 `abi_gr`，不链 `abi_g16`；`CALRAD` 在运行目录找不到 `abi_g16.SpcCoeff.bin` 时改用 `abi_gr`。v4.1 那个年代的 CRTM 也不是 crtm-py 拿来对过的 v2.4.0。
+
+crtm-py 自己和 gfortran `libcrtm` v2.4.0（`REAL64`）在 92 层晴空廓线上，通道 7–16 的差在 0.001 K 以内。那是标准廓线，不是这个 wrfout。
+
+全场 199×199 的 ADA 在单核上跑了一个小时还没写完文件，就停了。下面是每隔 10 个格点抽出来的 20×20（400 个点），全部有限。这是 upp-py 自己的数，不是偏差或 RMSE。
+
+| 通道 | 均值 (K) | 最小 | 最大 |
+| --- | ---: | ---: | ---: |
+| 7 | 291.530 | 230.375 | 314.766 |
+| 8 | 229.458 | 221.042 | 235.427 |
+| 9 | 237.751 | 223.232 | 244.229 |
+| 10 | 247.878 | 224.399 | 254.234 |
+| 11 | 286.178 | 229.425 | 302.700 |
+| 12 | 277.825 | 224.054 | 295.688 |
+| 13 | 289.045 | 225.665 | 309.148 |
+| 14 | 287.242 | 224.715 | 307.609 |
+| 15 | 282.921 | 224.171 | 302.526 |
+| 16 | 264.614 | 222.955 | 277.231 |
+
+通道 8–10 是水汽通道，比窗区冷，和红外通道的分工一致。通道 7 的最低值到 230 K，抽到的点里有很高的云顶。
