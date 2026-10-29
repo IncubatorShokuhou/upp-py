@@ -22,6 +22,10 @@ upp-py 用纯 Python 复现 NOAA/DTC UPP v4.1（``dtc_post_v4.1.0``）里 WRF-AR
    user_guide/moisture
    user_guide/surface
    user_guide/precip
+   user_guide/visibility
+   user_guide/icing
+   user_guide/aerosol
+   user_guide/brightness
    user_guide/reflectivity
    user_guide/cape
    user_guide/helicity

@@ -8,6 +8,7 @@ approximations remain.
 """
 
 from upp_py.config import PostConfig, load_config
+from upp_py.grib2 import write_grib2
 from upp_py.post import dataset_from_state, post_wrfout, write_netcdf
 
 __all__ = [
@@ -15,6 +16,7 @@ __all__ = [
     "dataset_from_state",
     "load_config",
     "post_wrfout",
+    "write_grib2",
     "write_netcdf",
 ]
-__version__ = "0.1.0"
+__version__ = "0.2.0"

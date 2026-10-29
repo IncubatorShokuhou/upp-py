@@ -43,4 +43,8 @@
 
 ``ds`` 是一个 xarray ``Dataset``。气压层在坐标 ``isobaric``（Pa）上，水平坐标是 ``latitude`` / ``longitude``，投影写在 ``crs``。每个变量的 ``grib2_shortName`` 属性是 wgrib2 里的短名。
 
-多个时次的文件用 ``--time`` 选择记录，默认第 0 个。UPP 一次只处理 itag 里点名的那个时次，这里也一样。
+多个时次用 ``--times 0,1,2``。每个时次的 ``apcp`` 是从起报累到该时次的连续总量；``--accum-hours 1`` 再给出以该时次为终点的 1 小时累积。只处理一个时次时，``--time`` 仍然可用，默认第 0 个。
+
+.. code-block:: bash
+
+   upp-py wrfout_d01 -o post.nc --grib2 post.grib2

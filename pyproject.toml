@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "upp-py"
-version = "0.1.0"
+version = "0.2.0"
 description = "Pure-Python WRF-ARW post-processor following NOAA/DTC UPP v4.1 algorithms"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -20,6 +20,8 @@ dependencies = [
 
 [project.optional-dependencies]
 grib = ["cfgrib>=0.9.10", "eccodes>=1.5"]
+# Not on PyPI. CI installs this extra so the import is real; coefficient files stay out.
+crtm = ["crtm-py @ git+https://github.com/IncubatorShokuhou/crtm-py"]
 docs = [
   "sphinx>=7",
   "pydata-sphinx-theme>=0.15",

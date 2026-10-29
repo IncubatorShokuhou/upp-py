@@ -8,20 +8,37 @@ wgrib2 prints for the same quantity.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timezone
 
 import numpy as np
 import xarray as xr
 
+from upp_py.aerosol import clip_number_concentration, mass_concentration
+from upp_py.brightness import VIS_GSD_SKIP_REASON, compute_brtmp, skip_reason
 from upp_py.cape import cape_best, cape_mixed_layer, cape_most_unstable, cape_surface
 from upp_py.clouds import cloud_fraction
 from upp_py.config import PostConfig
 from upp_py.constants import GI, SPL_PA
 from upp_py.helicity import storm_relative_helicity
+from upp_py.icing import in_flight_icing
 from upp_py.interp import interpolate_pressure_levels
 from upp_py.mslp import membrane_slp, shuell_slp
+from upp_py.precip import (
+    bucket_convective_mm,
+    bucket_graupel_mm,
+    bucket_gridscale_mm,
+    bucket_snow_mm,
+    bucket_total_mm,
+    continuous_convective_mm,
+    continuous_gridscale_mm,
+    continuous_total_mm,
+    precipitation_rate,
+    window_accumulation_mm,
+)
 from upp_py.reflectivity import reflectivity
 from upp_py.thermo import dewpoint, relative_humidity
+from upp_py.visibility import surface_visibility
 from upp_py.vorticity import absolute_vorticity
 from upp_py.wrf import WrfState, open_wrfout
 
@@ -42,6 +59,119 @@ def _var(data, dims, short, long_name, units, **extra):
     if dims[0] == "time" and (arr.ndim == len(dims) - 1):
         arr = arr[None, ...]
     return xr.DataArray(arr, dims=dims, attrs=attrs)
+
+
+def _ensure_model_level(coords: dict, nz: int) -> None:
+    if "model_level" in coords:
+        return
+    coords["model_level"] = (
+        "model_level",
+        np.arange(nz, dtype=np.int32),
+        {"long_name": "WRF mass level, 0 nearest the ground", "positive": "up"},
+    )
+
+
+def _add_aerosols(state: WrfState, cfg: PostConfig, data_vars: dict, coords: dict, notes: list[str]) -> None:
+    """Model-level aerosols. Missing inputs are recorded in ``notes``."""
+    number = (
+        ("QNWFA", "qnwfa", state.qnwfa),
+        ("QNIFA", "qnifa", state.qnifa),
+        ("QNCLOUD", "qncloud", state.qncloud),
+    )
+    for short, key, arr in number:
+        if not cfg.wants(short):
+            continue
+        if int(state.mp_physics) != 28:
+            notes.append(
+                f"{short}: INITPOST.F reads this only when imp_physics==28 "
+                f"(this file is mp_physics={int(state.mp_physics)})."
+            )
+            continue
+        if arr is None:
+            notes.append(f"{short}: wrfout has no {short}.")
+            continue
+        _ensure_model_level(coords, state.nz)
+        data_vars[key] = _var(
+            clip_number_concentration(arr),
+            ("time", "model_level", "y", "x"),
+            short,
+            f"{short} number concentration",
+            "kg-1",
+        )
+    if cfg.wants("SMOKE"):
+        smoke = state.aerosols.get("smoke")
+        if smoke is None:
+            notes.append("SMOKE: wrfout has no smoke (INITPOST.F VarName smoke).")
+        else:
+            _ensure_model_level(coords, state.nz)
+            data_vars["smoke"] = _var(
+                mass_concentration(smoke, state.p_mid, state.t),
+                ("time", "model_level", "y", "x"),
+                "SMOKE",
+                "smoke mass concentration",
+                "ug m-3",
+            )
+    if cfg.wants("DUST"):
+        bins = []
+        labels = []
+        for ibin in range(1, 6):
+            raw = state.aerosols.get(f"DUST_{ibin}")
+            if raw is None:
+                continue
+            bins.append(mass_concentration(raw, state.p_mid, state.t))
+            labels.append(ibin)
+        if not bins:
+            notes.append(
+                "DUST: wrfout has no DUST_1..DUST_5. INITPOST.F v4.1 wraps those reads in if(1==2), "
+                "so unipost does not fill them either. If the arrays are present, MDLFLD.f converts "
+                "ug kg-1 to ug m-3 with density."
+            )
+        else:
+            _ensure_model_level(coords, state.nz)
+            coords["dust_bin"] = ("dust_bin", np.asarray(labels, dtype=np.int32), {"long_name": "GOCART dust bin"})
+            data_vars["dust"] = _var(
+                np.stack(bins, axis=0),
+                ("time", "dust_bin", "model_level", "y", "x"),
+                "DUST",
+                "dust mass concentration",
+                "ug m-3",
+            )
+    column = (
+        ("AOTK", "aotk", "TAOD5502D", "aerosol optical thickness at 550 nm", "1"),
+        ("AERASY", "aerasy", "AERASY2D", "aerosol asymmetry parameter", "1"),
+        ("AERSSA", "aerssa", "AERSSA2D", "aerosol single-scattering albedo", "1"),
+    )
+    for short, key, wrf_name, long_name, units in column:
+        if not cfg.wants(short):
+            continue
+        arr = state.aerosols.get(wrf_name)
+        if arr is None:
+            notes.append(f"{short}: wrfout has no {wrf_name}.")
+            continue
+        data_vars[key] = _var(arr, ("time", "y", "x"), short, long_name, units)
+
+
+def _add_brtmp(state: WrfState, cfg: PostConfig, data_vars: dict, coords: dict, notes: list[str]) -> None:
+    """Write ``brtmp`` when ``crtm_py`` is installed. Otherwise record a skip."""
+    try:
+        tb = compute_brtmp(state, satellite=cfg.brtmp_satellite, channels=cfg.brtmp_channels)
+    except Exception as exc:
+        # BrtmpUnavailable, and any unexpected failure from the optional package.
+        notes.append(f"BRTMP: {exc}")
+        return
+    coords["abi_channel"] = (
+        "abi_channel",
+        np.asarray(cfg.brtmp_channels, dtype=np.int32),
+        {"long_name": "ABI channel number", "satellite": cfg.brtmp_satellite},
+    )
+    data_vars["brtmp"] = _var(
+        tb,
+        ("time", "abi_channel", "y", "x"),
+        "BRTMP",
+        f"brightness temperature {cfg.brtmp_satellite}",
+        "K",
+        satellite=cfg.brtmp_satellite,
+    )
 
 
 def precipitable_water(state: WrfState) -> np.ndarray:
@@ -93,8 +223,14 @@ def _projection(state: WrfState) -> xr.DataArray:
     return xr.DataArray(np.int32(proj), attrs=attrs)
 
 
-def post_wrfout(path: str, config: PostConfig | None = None, time_index: int = 0) -> xr.Dataset:
-    """Post one wrfout time to an :class:`xarray.Dataset`.
+def post_wrfout(
+    path: str,
+    config: PostConfig | None = None,
+    time_index: int = 0,
+    time_indices: tuple[int, ...] | list[int] | None = None,
+    accum_hours: float | None = None,
+) -> xr.Dataset:
+    """Post one or more wrfout times to an :class:`xarray.Dataset`.
 
     Parameters
     ----------
@@ -104,11 +240,56 @@ def post_wrfout(path: str, config: PostConfig | None = None, time_index: int = 0
         Field list. ``None`` posts the default core set on the standard
         UPP pressure levels.
     time_index
-        Which time record to read.
+        Which time record to read when ``time_indices`` is omitted.
+    time_indices
+        Several records from the same file, in any order. The result is
+        sorted by valid time. ``apcp`` at each time is the continuous
+        run total. Set ``accum_hours`` to also write ``apcp_accum``.
+    accum_hours
+        Overrides :attr:`PostConfig.accum_hours` when not ``None``.
     """
     cfg = config or PostConfig()
-    state = open_wrfout(path, time_index=time_index)
-    return dataset_from_state(state, cfg)
+    if accum_hours is not None:
+        cfg = replace(cfg, accum_hours=accum_hours)
+    indices = (int(time_index),) if time_indices is None else tuple(int(i) for i in time_indices)
+    if not indices:
+        raise ValueError("time_indices is empty")
+    states = [open_wrfout(path, time_index=i) for i in indices]
+    order = sorted(range(len(states)), key=lambda i: states[i].valid_time)
+    states = [states[i] for i in order]
+    parts = [dataset_from_state(state, cfg) for state in states]
+    if len(parts) == 1 and cfg.accum_hours is None:
+        return parts[0]
+    ds = _concat_times(parts)
+    if cfg.accum_hours is not None and (cfg.wants("APCP") or cfg.wants("APCP_BUCKET")):
+        ds = _add_window(ds, states, float(cfg.accum_hours))
+    return ds
+
+
+def _concat_times(parts: list[xr.Dataset]) -> xr.Dataset:
+    crs = parts[0]["crs"]
+    stripped = [part.drop_vars("crs") for part in parts]
+    ds = xr.concat(stripped, dim="time", combine_attrs="override")
+    ds["crs"] = crs
+    return ds
+
+
+def _add_window(ds: xr.Dataset, states: list[WrfState], hours: float) -> xr.Dataset:
+    amounts, actual = window_accumulation_mm(states, hours)
+    stacked = np.stack(amounts, axis=0)
+    ds = ds.assign_coords(accum_hours_actual=("time", np.asarray(actual, dtype=np.float64)))
+    ds["apcp_accum"] = _var(
+        stacked,
+        ("time", "y", "x"),
+        "APCP",
+        "precipitation accumulated over the requested window",
+        "kg m-2",
+        grib_stat="accumulation",
+        accum_length_hours=float(hours),
+    )
+    # _var adds a time axis when the array is missing it. stacked already
+    # has time as axis 0, and _var sees ndim == len(dims), so it keeps it.
+    return ds
 
 
 def dataset_from_state(state: WrfState, cfg: PostConfig) -> xr.Dataset:
@@ -123,12 +304,15 @@ def dataset_from_state(state: WrfState, cfg: PostConfig) -> xr.Dataset:
         "x": x,
         "latitude": (("y", "x"), state.lat, {"units": "degrees_north", "standard_name": "latitude"}),
         "longitude": (("y", "x"), state.lon, {"units": "degrees_east", "standard_name": "longitude"}),
+        "forecast_hour": ("time", np.array([state.forecast_hour], dtype=np.float64), {"units": "hours"}),
     }
 
     # Isobaric block. MSLP needs the full standard set even if the user
     # only asked for a few output levels, because MEMSLP walks down it.
+    notes: list[str] = []
     need_iso = any(
-        cfg.wants(n) for n in ("HGT", "TMP", "DPT", "RH", "SPFH", "UGRD", "VGRD", "VVEL", "ABSV", "PRMSL", "MSLET")
+        cfg.wants(n)
+        for n in ("HGT", "TMP", "DPT", "RH", "SPFH", "UGRD", "VGRD", "VVEL", "ABSV", "PRMSL", "MSLET", "TIPD")
     )
     levels_out = None
     if need_iso:
@@ -204,6 +388,18 @@ def dataset_from_state(state: WrfState, cfg: PostConfig) -> xr.Dataset:
             data_vars["absv"] = _var(
                 np.stack(absv, 0), ("time", "isobaric", "y", "x"), "ABSV", "absolute vorticity", "s-1"
             )
+        if cfg.wants("TIPD"):
+            tipd = []
+            for lv in levels_out:
+                rh_pct = relative_humidity(lv.pressure, lv.temperature, lv.specific_humidity, percent=True)
+                tipd.append(in_flight_icing(lv.temperature, rh_pct, lv.omega))
+            data_vars["tipd"] = _var(
+                np.stack(tipd, 0),
+                ("time", "isobaric", "y", "x"),
+                "TIPD",
+                "in-flight icing category",
+                "1",
+            )
 
     # Shelter and anemometer levels. Winds stay grid-relative, as UPP
     # writes U10/V10 without a Lambert rotation.
@@ -223,17 +419,116 @@ def dataset_from_state(state: WrfState, cfg: PostConfig) -> xr.Dataset:
         data_vars["v10"] = _var(state.v10, ("time", "y", "x"), "VGRD", "10 m grid-relative v wind", "m s-1", height="10 m")
 
     if cfg.wants("APCP"):
-        # SURFCE.f: ACPREC = (RAINC+RAINNC)*0.001 m, GRIB multiplies by 1000 -> mm = kg/m2.
-        apcp = state.rainc + state.rainnc
-        data_vars["apcp"] = _var(apcp, ("time", "y", "x"), "APCP", "total accumulated precipitation", "kg m-2")
+        # Continuous total. See upp_py.precip.continuous_total_mm.
+        data_vars["apcp"] = _var(
+            continuous_total_mm(state),
+            ("time", "y", "x"),
+            "APCP",
+            "total precipitation since forecast start",
+            "kg m-2",
+            grib_stat="accumulation",
+        )
+    if cfg.wants("ACPCP"):
+        data_vars["acpcp"] = _var(
+            continuous_convective_mm(state),
+            ("time", "y", "x"),
+            "ACPCP",
+            "convective precipitation since forecast start",
+            "kg m-2",
+            grib_stat="accumulation",
+        )
+    if cfg.wants("NCPCP"):
+        data_vars["ncpcp"] = _var(
+            continuous_gridscale_mm(state),
+            ("time", "y", "x"),
+            "NCPCP",
+            "grid-scale precipitation since forecast start",
+            "kg m-2",
+            grib_stat="accumulation",
+        )
+    bucket_length_h = (state.prec_acc_dt / 3600.0) if state.prec_acc_dt else None
+    if cfg.wants("APCP_BUCKET") or cfg.wants("ACPCP_BUCKET") or cfg.wants("NCPCP_BUCKET"):
+        missing_prec = state.prec_acc_c is None and state.prec_acc_nc is None
+        if missing_prec:
+            notes.append(
+                "APCP_BUCKET/ACPCP_BUCKET/NCPCP_BUCKET: wrfout has no PREC_ACC_C or PREC_ACC_NC "
+                "(INITPOST.F VarName PREC_ACC_C / PREC_ACC_NC)."
+            )
+        else:
+            if cfg.wants("APCP_BUCKET"):
+                data_vars["apcp_bucket"] = _var(
+                    bucket_total_mm(state),
+                    ("time", "y", "x"),
+                    "APCP",
+                    "bucket total precipitation over PREC_ACC_DT",
+                    "kg m-2",
+                    grib_stat="accumulation",
+                    accum_length_hours=bucket_length_h if bucket_length_h is not None else state.forecast_hour,
+                    prec_acc_dt_s=float(state.prec_acc_dt),
+                )
+            if cfg.wants("ACPCP_BUCKET"):
+                conv_b = bucket_convective_mm(state)
+                if conv_b is None:
+                    notes.append("ACPCP_BUCKET: wrfout has no PREC_ACC_C.")
+                else:
+                    data_vars["acpcp_bucket"] = _var(
+                        conv_b,
+                        ("time", "y", "x"),
+                        "ACPCP",
+                        "bucket convective precipitation over PREC_ACC_DT",
+                        "kg m-2",
+                        grib_stat="accumulation",
+                        accum_length_hours=bucket_length_h if bucket_length_h is not None else state.forecast_hour,
+                    )
+            if cfg.wants("NCPCP_BUCKET"):
+                grid_b = bucket_gridscale_mm(state)
+                if grid_b is None:
+                    notes.append("NCPCP_BUCKET: wrfout has no PREC_ACC_NC.")
+                else:
+                    data_vars["ncpcp_bucket"] = _var(
+                        grid_b,
+                        ("time", "y", "x"),
+                        "NCPCP",
+                        "bucket grid-scale precipitation over PREC_ACC_DT",
+                        "kg m-2",
+                        grib_stat="accumulation",
+                        accum_length_hours=bucket_length_h if bucket_length_h is not None else state.forecast_hour,
+                    )
+    if cfg.wants("SNOW_BUCKET"):
+        snow_b = bucket_snow_mm(state)
+        if snow_b is None:
+            notes.append("SNOW_BUCKET: wrfout has no SNOW_ACC_NC.")
+        else:
+            data_vars["snow_bucket"] = _var(
+                snow_b,
+                ("time", "y", "x"),
+                "WEASD",
+                "SNOW_ACC_NC bucket (UPP field 437 pname WEASD)",
+                "kg m-2",
+                grib_stat="accumulation",
+                accum_length_hours=bucket_length_h if bucket_length_h is not None else state.forecast_hour,
+            )
+    if cfg.wants("GRAUP_BUCKET"):
+        gr_b = bucket_graupel_mm(state)
+        if gr_b is None:
+            notes.append("GRAUP_BUCKET: wrfout has no GRAUP_ACC_NC.")
+        else:
+            data_vars["graup_bucket"] = _var(
+                gr_b,
+                ("time", "y", "x"),
+                "GRAUP",
+                "GRAUP_ACC_NC bucket (SURFCE.f field 775)",
+                "kg m-2",
+                grib_stat="accumulation",
+            )
     if cfg.wants("PRATE"):
-        dt = state.dt if state.dt > 0 else np.nan
-        # PREC (m/step) / DT * 1000 = kg m-2 s-1. RAINCV+RAINNCV are mm/step.
-        prate = (state.raincv + state.rainncv) / dt / 1000.0 * 1000.0
-        # mm/step / dt = mm/s = kg/m2/s. The *1000/1000 cancels; keep it
-        # readable as the SURFCE factor: (mm * 0.001) / dt * 1000.
-        prate = (state.raincv + state.rainncv) * 0.001 / dt * 1000.0
-        data_vars["prate"] = _var(prate, ("time", "y", "x"), "PRATE", "instantaneous precipitation rate", "kg m-2 s-1")
+        data_vars["prate"] = _var(
+            precipitation_rate(state),
+            ("time", "y", "x"),
+            "PRATE",
+            "instantaneous precipitation rate",
+            "kg m-2 s-1",
+        )
 
     if cfg.wants("PWAT"):
         data_vars["pwat"] = _var(precipitable_water(state), ("time", "y", "x"), "PWAT", "precipitable water", "kg m-2")
@@ -336,6 +631,21 @@ def dataset_from_state(state: WrfState, cfg: PostConfig) -> xr.Dataset:
         if cfg.wants("VSTM"):
             data_vars["vstm"] = _var(heli.v_storm, ("time", "y", "x"), "VSTM", "v component of storm motion", "m s-1")
 
+    if cfg.wants("VIS"):
+        data_vars["vis"] = _var(
+            surface_visibility(state),
+            ("time", "y", "x"),
+            "VIS",
+            "surface horizontal visibility",
+            "m",
+        )
+    if cfg.wants("VIS_GSD"):
+        notes.append("VIS_GSD: " + VIS_GSD_SKIP_REASON)
+    if cfg.wants("BRTMP"):
+        _add_brtmp(state, cfg, data_vars, coords, notes)
+
+    _add_aerosols(state, cfg, data_vars, coords, notes)
+
     if any(cfg.wants(n) for n in ("TCDC", "LCDC", "MCDC", "HCDC")):
         cld = cloud_fraction(state)
         if cfg.wants("LCDC"):
@@ -363,6 +673,8 @@ def dataset_from_state(state: WrfState, cfg: PostConfig) -> xr.Dataset:
     ds.attrs["history"] = f"upp-py {datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}"
     ds.attrs["forecast_reference_time"] = state.start_time.strftime("%Y-%m-%dT%H:%M:%SZ")
     ds.attrs["forecast_hour"] = float(state.forecast_hour)
+    if notes:
+        ds.attrs["skipped"] = " | ".join(notes)
     ds.attrs["mp_physics"] = int(state.mp_physics)
     ds.attrs["Conventions"] = "CF-1.8"
     ds.attrs["DX"] = float(state.dx)

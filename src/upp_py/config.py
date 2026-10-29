@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from upp_py.brightness import ABI_IR_CHANNELS
 from upp_py.constants import SPL_PA
 
 # Short names this package knows how to compute. The set is the WRF-ARW
@@ -43,11 +44,30 @@ KNOWN_FIELDS = (
     "VSTM",
     "PWAT",
     "APCP",
+    "ACPCP",
+    "NCPCP",
+    "APCP_BUCKET",
+    "ACPCP_BUCKET",
+    "NCPCP_BUCKET",
+    "SNOW_BUCKET",
+    "GRAUP_BUCKET",
     "PRATE",
     "TCDC",
     "LCDC",
     "MCDC",
     "HCDC",
+    "VIS",
+    "VIS_GSD",
+    "TIPD",
+    "BRTMP",
+    "QNWFA",
+    "QNIFA",
+    "QNCLOUD",
+    "SMOKE",
+    "DUST",
+    "AOTK",
+    "AERASY",
+    "AERSSA",
 )
 
 DEFAULT_FIELDS = (
@@ -79,11 +99,18 @@ DEFAULT_FIELDS = (
     "VSTM",
     "PWAT",
     "APCP",
+    "ACPCP",
+    "NCPCP",
+    "APCP_BUCKET",
+    "ACPCP_BUCKET",
+    "NCPCP_BUCKET",
     "PRATE",
     "TCDC",
     "LCDC",
     "MCDC",
     "HCDC",
+    "VIS",
+    "TIPD",
 )
 
 
@@ -101,11 +128,26 @@ class PostConfig:
         Isobaric levels, Pa, any order.
     reflectivity_agl_m
         Heights for ``REFD``.
+    accum_hours
+        If set, also write ``apcp_accum``, the trailing accumulation of
+        that many hours. ``None`` leaves ``apcp`` as the run total only.
+        The window is applied by :func:`upp_py.post_wrfout` when more
+        than one time is read, and also for a single time (clamped to
+        the forecast start).
+    brtmp_satellite
+        CRTM sensor id passed to ``crtm_py.brightness_temperature``
+        when ``BRTMP`` is requested. ``abi_g16``, ``abi_g17``, or
+        ``abi_gr``, matching ``CALRAD_WCLOUD_newcrtm.f``.
+    brtmp_channels
+        ABI channel numbers. Default is infrared 7-16.
     """
 
     fields: tuple[str, ...] = DEFAULT_FIELDS
     pressure_pa: tuple[float, ...] = SPL_PA
     reflectivity_agl_m: tuple[float, ...] = (1000.0, 4000.0)
+    accum_hours: float | None = None
+    brtmp_satellite: str = "abi_g16"
+    brtmp_channels: tuple[int, ...] = ABI_IR_CHANNELS
 
     def wants(self, name: str) -> bool:
         return name in self.fields
@@ -132,7 +174,21 @@ def load_config(path: str | Path | None) -> PostConfig:
     else:
         pressure = SPL_PA
     agl = tuple(float(z) for z in raw.get("reflectivity_agl_m", (1000.0, 4000.0)))
-    return PostConfig(fields=fields, pressure_pa=pressure, reflectivity_agl_m=agl)
+    accum = raw.get("accum_hours")
+    accum_hours = None if accum is None else float(accum)
+    satellite = str(raw.get("brtmp_satellite", "abi_g16"))
+    if "brtmp_channels" in raw:
+        channels = tuple(int(c) for c in raw["brtmp_channels"])
+    else:
+        channels = ABI_IR_CHANNELS
+    return PostConfig(
+        fields=fields,
+        pressure_pa=pressure,
+        reflectivity_agl_m=agl,
+        accum_hours=accum_hours,
+        brtmp_satellite=satellite,
+        brtmp_channels=channels,
+    )
 
 
 def dump_example(path: str | Path) -> None:
@@ -167,12 +223,22 @@ fields:
   - VSTM
   - PWAT
   - APCP
+  - ACPCP
+  - NCPCP
+  - APCP_BUCKET
   - PRATE
+  - VIS
+  - TIPD
   - TCDC
   - LCDC
   - MCDC
   - HCDC
 pressure_hpa: [250, 500, 700, 850, 925, 1000]
 reflectivity_agl_m: [1000, 4000]
+# accum_hours: 1
+# BRTMP needs https://github.com/IncubatorShokuhou/crtm-py . Uncomment when it is installed.
+#  - BRTMP
+# brtmp_satellite: abi_g16
+# brtmp_channels: [7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
 """
     Path(path).write_text(text, encoding="utf-8")

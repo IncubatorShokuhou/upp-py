@@ -97,6 +97,46 @@ class WrfState:
     # Model diagnostic. NCAR + Thompson posts the column max of this
     # array as REFC (MDLFLD.f); None if the file does not have it.
     refl_10cm: np.ndarray | None = None
+    # WRF bucket_mm reset counters. Absent means the file never dumped
+    # RAINC/RAINNC, which is the case SURFCE.f assumes.
+    i_rainc: np.ndarray | None = None
+    i_rainnc: np.ndarray | None = None
+    bucket_mm: float = 0.0
+    # PREC_ACC_* are mm over PREC_ACC_DT seconds (INITPOST.F).
+    prec_acc_c: np.ndarray | None = None
+    prec_acc_nc: np.ndarray | None = None
+    snow_acc_nc: np.ndarray | None = None
+    graup_acc_nc: np.ndarray | None = None
+    prec_acc_dt: float = 0.0
+    # Fraction of precipitation that is snow, used by the visibility
+    # convective term in MDLFLD.f. None is treated as all rain.
+    sr: np.ndarray | None = None
+    # Thompson aerosol-aware number concentrations (mp_physics == 28).
+    qnwfa: np.ndarray | None = None
+    qnifa: np.ndarray | None = None
+    qncloud: np.ndarray | None = None
+    # WRF-Chem / GOCART arrays keyed by the wrfout name, when present.
+    aerosols: dict = field(default_factory=dict)
+    # Fields CALRAD_WCLOUD_newcrtm.f reads for ABI brightness temperature.
+    # Missing arrays stay None; the brightness-temperature caller treats
+    # that the same way UPP treats a failed getVariable (zero / default).
+    tsk: np.ndarray | None = None
+    xland: np.ndarray | None = None
+    ivgtyp: np.ndarray | None = None
+    ivegsrc: int = 1
+    veg_fraction: np.ndarray | None = None
+    snow_fraction: np.ndarray | None = None
+    snow_depth_mm: np.ndarray | None = None
+    seaice: np.ndarray | None = None
+    smstot: np.ndarray | None = None
+    o3: np.ndarray | None = None
+    qnr: np.ndarray | None = None
+    qni: np.ndarray | None = None
+    f_rimef: np.ndarray | None = None
+    cu_physics: int = 0
+    hbot: np.ndarray | None = None
+    htop: np.ndarray | None = None
+    cnvcfr: np.ndarray | None = None
     attrs: dict = field(default_factory=dict)
 
     @property
@@ -160,6 +200,35 @@ def _get3d(ds: xr.Dataset, name: str, itime: int) -> np.ndarray | None:
         da = da.isel(Time=itime)
     data = np.asarray(da.values, dtype=np.float64)
     return data
+
+
+def _maybe(ds: xr.Dataset, name: str, itime: int) -> np.ndarray | None:
+    """Return one time of ``name``, or ``None`` when the file lacks it."""
+    if name not in ds.variables:
+        return None
+    da = ds[name]
+    if "Time" in da.dims:
+        da = da.isel(Time=itime)
+    return np.asarray(da.values, dtype=np.float64)
+
+
+def _first_present(ds: xr.Dataset, names: tuple[str, ...], itime: int) -> np.ndarray | None:
+    for name in names:
+        data = _maybe(ds, name, itime)
+        if data is not None:
+            return data
+    return None
+
+
+def _attr_float(ds: xr.Dataset, name: str) -> float | None:
+    if name in ds.attrs:
+        try:
+            return float(ds.attrs[name])
+        except (TypeError, ValueError):
+            return None
+    if name in ds.variables and np.size(ds[name].values) == 1:
+        return float(np.asarray(ds[name].values).reshape(-1)[0])
+    return None
 
 
 def _optional3d(ds, name, itime, shape, fill=0.0) -> np.ndarray:
@@ -354,6 +423,52 @@ def _load(ds: xr.Dataset, path: str, itime: int) -> WrfState:
     rainnc = np.asarray(ds["RAINNC"].isel(Time=itime).values, dtype=np.float64) if "RAINNC" in ds else np.zeros((ny, nx))
     raincv = np.asarray(ds["RAINCV"].isel(Time=itime).values, dtype=np.float64) if "RAINCV" in ds else np.zeros((ny, nx))
     rainncv = np.asarray(ds["RAINNCV"].isel(Time=itime).values, dtype=np.float64) if "RAINNCV" in ds else np.zeros((ny, nx))
+    bucket_mm = _attr_float(ds, "BUCKET_MM")
+    prec_acc_dt = _attr_float(ds, "PREC_ACC_DT")
+    aerosols: dict = {}
+    smoke = _maybe(ds, "smoke", itime)
+    if smoke is not None:
+        aerosols["smoke"] = smoke
+    for ibin in range(1, 6):
+        dust = _maybe(ds, f"DUST_{ibin}", itime)
+        if dust is not None:
+            aerosols[f"DUST_{ibin}"] = dust
+    for key in ("TAOD5502D", "AERASY2D", "AERSSA2D", "AOD3D_SMOKE"):
+        arr = _maybe(ds, key, itime)
+        if arr is not None:
+            aerosols[key] = arr
+    tsk = _maybe(ds, "TSK", itime)
+    xland = _maybe(ds, "XLAND", itime)
+    ivg_raw = _maybe(ds, "IVGTYP", itime)
+    ivgtyp = None if ivg_raw is None else np.rint(ivg_raw).astype(np.int64)
+    veg = _maybe(ds, "VEGFRA", itime)
+    if veg is not None and np.nanmax(veg) > 1.5:
+        # INITPOST.F stores VEGFRA/100. Values already in [0, 1] are left alone.
+        veg = veg / 100.0
+    snowc = _maybe(ds, "SNOWC", itime)
+    if snowc is not None and np.nanmax(snowc) > 1.5:
+        snowc = snowc / 100.0
+    snowh = _maybe(ds, "SNOWH", itime)
+    if snowh is not None:
+        # INITPOST.F: SI = min(max(SNOWH, 0), 50) * 1000 mm.
+        snowh = np.clip(snowh, 0.0, 50.0) * 1000.0
+    seaice = _maybe(ds, "SEAICE", itime)
+    smstot = _maybe(ds, "SMSTOT", itime)
+    o3 = _get3d(ds, "O3", itime)
+    if o3 is None:
+        o3 = _get3d(ds, "OZONE", itime)
+    qnr = _get3d(ds, "QNRAIN", itime)
+    qni = _get3d(ds, "QNICE", itime)
+    f_rimef = _get3d(ds, "F_RIMEF", itime)
+    hbot = _maybe(ds, "HBOT", itime)
+    htop = _maybe(ds, "HTOP", itime)
+    cnvcfr = _maybe(ds, "CNVCFR", itime)
+    mminlu = ds.attrs.get("MMINLU", "")
+    if isinstance(mminlu, bytes):
+        mminlu = mminlu.decode()
+    ivegsrc = 0 if "USGS" in str(mminlu).upper() else 1
+    cu_raw = _attr_float(ds, "CU_PHYSICS")
+    cu_physics = 0 if cu_raw is None else int(cu_raw)
 
     # 2 m temperature: TH2 is potential temperature; SURFCE.f converts
     # with shelter pressure, not PSFC.
@@ -427,5 +542,35 @@ def _load(ds: xr.Dataset, path: str, itime: int) -> WrfState:
         rainncv=rainncv,
         dt=dt,
         refl_10cm=_get3d(ds, "REFL_10CM", itime),
+        i_rainc=_first_present(ds, ("I_RAINC",), itime),
+        i_rainnc=_first_present(ds, ("I_RAINNC",), itime),
+        bucket_mm=0.0 if bucket_mm is None else float(bucket_mm),
+        prec_acc_c=_first_present(ds, ("PREC_ACC_C", "RAINC_BUCKET"), itime),
+        prec_acc_nc=_first_present(ds, ("PREC_ACC_NC", "RAINNC_BUCKET"), itime),
+        snow_acc_nc=_first_present(ds, ("SNOW_ACC_NC", "SNOW_BUCKET"), itime),
+        graup_acc_nc=_first_present(ds, ("GRAUP_ACC_NC", "GRAUP_BUCKET"), itime),
+        prec_acc_dt=0.0 if prec_acc_dt is None else abs(float(prec_acc_dt)),
+        sr=_maybe(ds, "SR", itime),
+        qnwfa=_maybe(ds, "QNWFA", itime),
+        qnifa=_maybe(ds, "QNIFA", itime),
+        qncloud=_maybe(ds, "QNCLOUD", itime),
+        aerosols=aerosols,
+        tsk=tsk,
+        xland=xland,
+        ivgtyp=ivgtyp,
+        ivegsrc=ivegsrc,
+        veg_fraction=veg,
+        snow_fraction=snowc,
+        snow_depth_mm=snowh,
+        seaice=seaice,
+        smstot=smstot,
+        o3=o3,
+        qnr=qnr,
+        qni=qni,
+        f_rimef=f_rimef,
+        cu_physics=cu_physics,
+        hbot=hbot,
+        htop=htop,
+        cnvcfr=cnvcfr,
         attrs={k: (v.decode() if isinstance(v, bytes) else v) for k, v in ds.attrs.items() if isinstance(v, (str, bytes, int, float, np.number))},
     )

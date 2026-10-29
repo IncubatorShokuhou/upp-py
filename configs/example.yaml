@@ -28,7 +28,14 @@ fields:
   - VSTM
   - PWAT
   - APCP
+  - ACPCP
+  - NCPCP
+  - APCP_BUCKET
+  - ACPCP_BUCKET
+  - NCPCP_BUCKET
   - PRATE
+  - VIS
+  - TIPD
   - TCDC
   - LCDC
   - MCDC
